@@ -5,29 +5,43 @@ use serde_json::Value;
 use std::env;
 use std::error::Error;
 use std::fs::OpenOptions;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let datadir = "/home/brasides/programming/data/BTC_historic_minute/weekly_data";
+    let file_prefix = "BTC_minute";
+    let start_time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs()
+        .to_string();
+    let file_name = format!("{}_{}", file_prefix, start_time);
+
+    scrape(datadir, &file_name, &start_time).await?;
+    Ok(())
+}
+
+async fn scrape(datadir: &str, file_name: &str, start_time: &str) -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
 
-    let datadir = "/home/brasides/programming/data/BTC_historic_minute";
+    let full_file_name = format!("{}/{}", datadir, file_name);
     // Roundabout way of cleaning old file, since you cannot truncate on a file you open with
     // append.
     let _temp_file = OpenOptions::new()
         .write(true)
         .truncate(true)
-        .open(format!("{}/{}", datadir, "test_data.csv"));
+        .open(&full_file_name);
     // Open file for the csv writer, set to append.
     let file = OpenOptions::new()
         .read(true)
         .append(true)
         .create(true)
-        .open(format!("{}/{}", datadir, "test_data.csv"))?;
+        .open(&full_file_name)?;
     // Configure the csv writer, taking the file descriptor from above so it will append instead of
     // write over the current contents.
     let mut wtr = Writer::from_writer(file);
 
+    // Not actually sure what this does, kind of copy pasta to use reqwest.
     let mut h = header::HeaderMap::new();
     h.insert(
         "Accept",
@@ -45,14 +59,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // limit is number of data points to be queried for, from 1-2000
     let limit = "2000";
     // toT is how far back from the current time to query for
+    // This is initialized to the current time when the program starts running
     #[allow(non_snake_case)]
-    let mut toTs: String = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)?
-        .as_secs()
-        .to_string();
+    let mut toTs: String = String::from(start_time);
     // my api key
     let api_key = &env::var("API_KEY").unwrap();
 
+    // Main loop for the program. It will get the 2000 most recent data points,
+    // then use the earliest time stamp among those to query for the next most
+    // recent 2000 data points, going up to a total of 10000, the number of
+    // minutes in a week (which is the current amount of historical data
+    // available).
     let mut data_response: Vec<Data>;
     for _ in 0..=5 {
         let request_url = format!(
@@ -72,16 +89,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         data_response =
             serde_json::from_value(structured_response["Data"]["Data"].to_owned()).unwrap();
         for line in data_response.iter().rev() {
-            println!("{:?}", line.time);
             wtr.serialize(line)?;
         }
         toTs = (data_response[0].time - 60).to_string();
     }
-    //let response_data: Vec<Data> = serde_json::from_value(structured_response).unwrap();
-
-    //for line in response_data {
-    //    println!("{:?}", line);
-    //}
 
     Ok(())
 }
