@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use csv::Writer;
 use reqwest::header;
 use serde::{Deserialize, Serialize};
@@ -103,7 +104,7 @@ pub async fn scrape(
 
 // Read two files downloaded api data saved as a .csv, and remove duplicates.
 // Also checks to see if there are any gaps in the minute-resolution of the data.
-pub async fn merge(file1: &str, file2: &str) -> Result<(), Box<dyn Error>> {
+pub async fn merge(file1: &str, file2: &str, write_dir: &str) -> Result<(), Box<dyn Error>> {
     let mut rdr1 = csv::Reader::from_path(file1)?;
     let mut rdr2 = csv::Reader::from_path(file2)?;
     let mut data_vec: Vec<Data> = vec![];
@@ -141,6 +142,26 @@ pub async fn merge(file1: &str, file2: &str) -> Result<(), Box<dyn Error>> {
             //    println!("\t{:?}", entry);
             //}
         }
+    }
+
+    let start_date = NaiveDateTime::from_timestamp(data_vec[0].time.try_into().unwrap(), 0);
+    let end_date =
+        NaiveDateTime::from_timestamp(data_vec.last().unwrap().time.try_into().unwrap(), 0);
+    let file_name = format!(
+        "{}/{}_to_{}.csv",
+        write_dir,
+        start_date.date(),
+        end_date.date()
+    );
+    println!("Writing to file: {}", &file_name);
+    let fd = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(file_name)
+        .expect("Could not create file, likely because the file already exists.");
+    let mut wtr = Writer::from_writer(fd);
+    for row in data_vec {
+        wtr.serialize(row)?;
     }
 
     Ok(())

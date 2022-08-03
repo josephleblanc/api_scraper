@@ -32,6 +32,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             break;
         } else if command.starts_with("merge") {
             let datadir = "/home/brasides/programming/data/BTC_historic_minute/weekly_data";
+            let write_dir = "/home/brasides/programming/data/BTC_historic_minute/merged_storage";
             let words: Vec<&str> = buffer.split_ascii_whitespace().collect();
             if words.len() != 3 {
                 if command == "merge" {
@@ -42,7 +43,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     if datadir_files.len() == 2 {
                         let file1 = format!("{}/{}", datadir, datadir_files[0]);
                         let file2 = format!("{}/{}", datadir, datadir_files[1]);
-                        merge(&file1, &file2).await?;
+                        merge(&file1, &file2, write_dir).await?;
                         println!(
                             "merge complete:\nfiles {} and {} have been successfully merged.",
                             file1, file2
@@ -54,7 +55,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
             let file1 = format!("{}/{}", datadir, words[1]);
             let file2 = format!("{}/{}", datadir, words[2]);
-            merge(&file1, &file2).await?;
+            merge(&file1, &file2, write_dir).await?;
             println!(
                 "merge complete:\nfiles {} and {} have been successfully merged.",
                 file1, file2
