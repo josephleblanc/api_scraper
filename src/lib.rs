@@ -101,6 +101,78 @@ pub async fn scrape(
     Ok(())
 }
 
+// Read two files downloaded api data saved as a .csv, and remove duplicates.
+// Also checks to see if there are any gaps in the minute-resolution of the data.
 pub async fn merge(file1: &str, file2: &str) -> Result<(), Box<dyn Error>> {
+    let mut rdr1 = csv::Reader::from_path(file1)?;
+    let mut rdr2 = csv::Reader::from_path(file2)?;
+    let mut data_vec: Vec<Data> = vec![];
+    for row in rdr1.deserialize() {
+        let data1: Data = row?;
+        data_vec.push(data1);
+    }
+    for row in rdr2.deserialize() {
+        let data2: Data = row?;
+        data_vec.push(data2);
+    }
+
+    data_vec.sort_by(|a, b| a.time.cmp(&b.time));
+
+    println!("before dedup, vec.len(): {}", data_vec.len());
+    let doubles_before: u64 = count_doubles(&mut data_vec)?;
+    println!("{} doubles found.", doubles_before);
+
+    data_vec.dedup_by(|a, b| a.time.eq(&b.time));
+
+    println!("after  dedup, vec.len(): {}", data_vec.len());
+    let doubles_after: u64 = count_doubles(&mut data_vec)?;
+    println!("{} doubles found.", doubles_after);
+    println!("first: {}", data_vec[0].time);
+    println!("last : {}", data_vec.last().unwrap().time);
+    println!("Checking continuity...");
+    let continuity_breaks = check_continuity(&mut data_vec)?;
+    match continuity_breaks.is_empty() {
+        true => {
+            println!("\tNo breaks in continuity");
+        }
+        false => {
+            println!("\t{} breaks in continuity.", continuity_breaks.len());
+            //for entry in continuity_breaks {
+            //    println!("\t{:?}", entry);
+            //}
+        }
+    }
+
     Ok(())
+}
+
+// count the number of doubles in an array of Data structs ordered by time.
+pub fn count_doubles(data_vec: &mut [Data]) -> Result<u64, Box<dyn Error>> {
+    let mut doubles: u64 = 0;
+    let peekable = &mut data_vec.iter().peekable();
+    for _ in 0..peekable.len() {
+        if let Some(first) = peekable.next() {
+            if let Some(second) = peekable.peek() {
+                if first.time == second.time {
+                    doubles += 1;
+                }
+            }
+        }
+    }
+    Ok(doubles)
+}
+
+pub fn check_continuity(data_vec: &mut [Data]) -> Result<Vec<&Data>, Box<dyn Error>> {
+    let mut continuity_breaks: Vec<&Data> = vec![];
+    let peekable = &mut data_vec.iter().peekable();
+    for _ in 0..peekable.len() {
+        if let Some(first) = peekable.next() {
+            if let Some(second) = peekable.peek() {
+                if first.time + 60 != second.time {
+                    continuity_breaks.push(first);
+                }
+            }
+        }
+    }
+    Ok(continuity_breaks)
 }

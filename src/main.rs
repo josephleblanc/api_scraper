@@ -1,5 +1,6 @@
 use api_scraper::{merge, scrape};
 use std::error::Error;
+use std::fs;
 use std::io;
 use std::time::SystemTime;
 
@@ -33,12 +34,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let datadir = "/home/brasides/programming/data/BTC_historic_minute/weekly_data";
             let words: Vec<&str> = buffer.split_ascii_whitespace().collect();
             if words.len() != 3 {
+                if command == "merge" {
+                    let datadir_files: Vec<String> = fs::read_dir(datadir)?
+                        .filter(|f| f.as_ref().unwrap().metadata().unwrap().is_file())
+                        .map(|f| f.unwrap().file_name().into_string().unwrap())
+                        .collect();
+                    if datadir_files.len() == 2 {
+                        let file1 = format!("{}/{}", datadir, datadir_files[0]);
+                        let file2 = format!("{}/{}", datadir, datadir_files[1]);
+                        merge(&file1, &file2).await?;
+                        println!(
+                            "merge complete:\nfiles {} and {} have been successfully merged.",
+                            file1, file2
+                        );
+                    }
+                }
                 println!("You must supply 2 file names to use merge");
                 continue;
             }
             let file1 = format!("{}/{}", datadir, words[1]);
             let file2 = format!("{}/{}", datadir, words[2]);
             merge(&file1, &file2).await?;
+            println!(
+                "merge complete:\nfiles {} and {} have been successfully merged.",
+                file1, file2
+            );
         } else if command == "help" {
             println!(
                 "Available commands:
