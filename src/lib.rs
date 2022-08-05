@@ -104,7 +104,7 @@ pub async fn scrape(
 
 // Read two files downloaded api data saved as a .csv, and remove duplicates.
 // Also checks to see if there are any gaps in the minute-resolution of the data.
-pub async fn merge(file1: &str, file2: &str, write_dir: &str) -> Result<(), Box<dyn Error>> {
+pub async fn merge(file1: &str, file2: &str, write_dir: &str) -> Result<String, Box<dyn Error>> {
     let mut rdr1 = csv::Reader::from_path(file1)?;
     let mut rdr2 = csv::Reader::from_path(file2)?;
     let mut data_vec: Vec<Data> = vec![];
@@ -156,15 +156,16 @@ pub async fn merge(file1: &str, file2: &str, write_dir: &str) -> Result<(), Box<
     println!("Writing to file: {}", &file_name);
     let fd = OpenOptions::new()
         .write(true)
-        .create_new(true)
-        .open(file_name)
+        .create(true)
+        .truncate(true)
+        .open(&file_name)
         .expect("Could not create file, likely because the file already exists.");
     let mut wtr = Writer::from_writer(fd);
     for row in data_vec {
         wtr.serialize(row)?;
     }
 
-    Ok(())
+    Ok(file_name)
 }
 
 // count the number of doubles in an array of Data structs ordered by time.
