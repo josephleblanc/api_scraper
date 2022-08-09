@@ -1,4 +1,4 @@
-use api_scraper::{merge, scrape};
+use api_scraper::{backup_master, merge, scrape};
 use std::error::Error;
 use std::fs;
 use std::fs::OpenOptions;
@@ -35,6 +35,52 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("Output file name: {}", file_name);
             scrape(datadir, &file_name, &start_time).await?;
             break;
+        } else if command.starts_with("update master") {
+            let master_dir = "/home/brasides/programming/data/BTC_historic_minute/master";
+            let write_dir = master_dir;
+            let mut master_file: Vec<String> = fs::read_dir(master_dir)?
+                .filter(|f| f.as_ref().unwrap().metadata().unwrap().is_file())
+                .map(|f| f.unwrap().file_name().into_string().unwrap())
+                .collect();
+            if master_file.len() != 1 {
+                println!("There must be one file in the master folder. Ensure the only file in the master folder is the master .csv file to proceed.");
+                continue;
+            }
+            let master_file_name = master_file.pop().expect("Problem loading master file");
+            let master_file_path = format!("{}/{}", master_dir, master_file_name);
+
+            println!("Creating backup for master file");
+            let backup_filepath = backup_master(&master_file_name)?;
+            println!("Master backup successfully created");
+            println!("Merging backup with newly downloaded files");
+
+            let newly_downloaded_dir =
+                "/home/brasides/programming/data/BTC_historic_minute/weekly_data";
+            let mut newly_downloaded_filenames: Vec<String> = fs::read_dir(newly_downloaded_dir)
+                .expect("cannot read newly_downloaded_dir")
+                .filter(|f| f.as_ref().unwrap().metadata().unwrap().is_file())
+                .map(|f| f.unwrap().file_name().into_string().unwrap())
+                .collect();
+            if newly_downloaded_filenames.len() == 1 {
+                let newly_downloaded_filepath = format!(
+                    "{}/{}",
+                    newly_downloaded_dir,
+                    newly_downloaded_filenames.pop().unwrap()
+                );
+                println!("merging {} with master", newly_downloaded_filepath);
+                let new_master =
+                    merge(&backup_filepath, &newly_downloaded_filepath, write_dir).await?;
+                println!("new master created at {}", new_master);
+                println!("removing newly dowloaded file");
+                fs::remove_file(&newly_downloaded_filepath)
+                    .expect("Could not remove newly dowloaded file");
+                println!("removing old master");
+                fs::remove_file(&master_file_path).expect("Could not remove old master file");
+                println!("master successfully updated");
+            } else {
+                println!("Error: There is more than one newly downloaded file in weekly_data");
+                continue;
+            }
         } else if command.starts_with("merge") {
             let datadir = "/home/brasides/programming/data/BTC_historic_minute/weekly_data";
             let write_dir = "/home/brasides/programming/data/BTC_historic_minute/merged_storage";

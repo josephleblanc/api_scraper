@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::env;
 use std::error::Error;
+use std::fs;
 use std::fs::OpenOptions;
 // use serde_json::Result;
 
@@ -105,8 +106,8 @@ pub async fn scrape(
 // Read two files downloaded api data saved as a .csv, and remove duplicates.
 // Also checks to see if there are any gaps in the minute-resolution of the data.
 pub async fn merge(file1: &str, file2: &str, write_dir: &str) -> Result<String, Box<dyn Error>> {
-    let mut rdr1 = csv::Reader::from_path(file1)?;
-    let mut rdr2 = csv::Reader::from_path(file2)?;
+    let mut rdr1 = csv::Reader::from_path(file1).expect("merge function cannot find file1");
+    let mut rdr2 = csv::Reader::from_path(file2).expect("merge function cannot find file2");
     let mut data_vec: Vec<Data> = vec![];
     for row in rdr1.deserialize() {
         let data1: Data = row?;
@@ -148,10 +149,11 @@ pub async fn merge(file1: &str, file2: &str, write_dir: &str) -> Result<String, 
     let end_date =
         NaiveDateTime::from_timestamp(data_vec.last().unwrap().time.try_into().unwrap(), 0);
     let file_name = format!(
-        "{}/{}_to_{}.csv",
+        "{}/{}_to_{}_{}.csv",
         write_dir,
         start_date.date(),
-        end_date.date()
+        end_date.date(),
+        end_date.time()
     );
     println!("Writing to file: {}", &file_name);
     let fd = OpenOptions::new()
@@ -197,4 +199,21 @@ pub fn check_continuity(data_vec: &mut [Data]) -> Result<Vec<&Data>, Box<dyn Err
         }
     }
     Ok(continuity_breaks)
+}
+
+pub fn backup_master(master_file_name: &str) -> Result<String, Box<dyn Error>> {
+    let backup_dir = "/home/brasides/programming/data/BTC_historic_minute/backup";
+    let backup_master_filepath = format!("{}/{}", backup_dir, master_file_name);
+    let _backup_master_fd = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&backup_master_filepath)
+        .expect("coult not create backup master file");
+
+    let master_dir = "/home/brasides/programming/data/BTC_historic_minute/master";
+    let master_filepath = format!("{}/{}", master_dir, master_file_name);
+
+    fs::copy(&master_filepath, &backup_master_filepath)?;
+    Ok(backup_master_filepath)
 }
