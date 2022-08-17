@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 fs::remove_file(&master_file_path).expect("Could not remove old master file");
                 println!("master successfully updated");
             } else {
-                println!("Error: There is more than one newly downloaded file in weekly_data");
+                println!("Error: There is more than one newly downloaded file in weekly_data, or the weekly_data dir is empty.");
                 continue;
             }
         } else if command.starts_with("merge") {
